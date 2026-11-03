@@ -1,0 +1,62 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Noto Sans Thai", Tahoma, "Segoe UI", Arial, sans-serif; font-size: 15px; color: #0f172a; background: #f1f5f9; }
+.hidden { display: none !important; }
+a { color: #e60f2b; }
+button { font-family: inherit; font-size: inherit; }
+.link { background: none; border: 0; color: #e60f2b; cursor: pointer; padding: 0; text-decoration: underline; }
+.btn { background: #e60f2b; color: #fff; border: 0; border-radius: 8px; padding: 9px 22px; cursor: pointer; font-weight: 600; }
+.btn:hover { background: #b80c22; }
+.btn.gray { background: #64748b; }
+.btn.gray:hover { background: #475569; }
+.btn.small { padding: 4px 12px; font-size: 13px; }
+.btn:disabled { opacity: .6; cursor: wait; }
+
+.msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
+.msg.err { background: #fde8eb; color: #a50d26; border: 1px solid #f5b5be; }
+.msg.ok { background: #e3f7ec; color: #047857; border: 1px solid #a7e3c4; }
+.msg.warn { background: #fff4d6; color: #92400e; border: 1px solid #f5d98a; }
+
+/* login */
+#login-view { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card { background: #fff; width: 360px; padding: 32px; border-radius: 18px; box-shadow: 0 10px 40px rgba(15,23,42,.12); }
+.login-card .logo { width: 52px; height: 52px; border-radius: 14px; background: #e60f2b; color: #fff; font-weight: 700; font-size: 22px; line-height: 52px; text-align: center; margin-bottom: 14px; }
+.login-card h1 { margin: 0; font-size: 22px; }
+.login-card .sub { margin: 2px 0 18px; color: #64748b; }
+.login-card .btn { width: 100%; margin-top: 18px; }
+label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin: 12px 0 4px; }
+input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], select, textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; background: #fff; }
+textarea { resize: vertical; }
+
+/* app */
+header { background: #e60f2b; color: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+header .brand { font-weight: 700; }
+header .link { color: #fff; margin-left: 12px; }
+.layout { display: flex; min-height: calc(100vh - 50px); }
+nav { width: 220px; background: #fff; border-right: 1px solid #e2e8f0; padding: 16px 10px; flex: none; }
+nav button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 10px 14px; border-radius: 8px; cursor: pointer; color: #334155; font-weight: 600; margin-bottom: 2px; }
+nav button:hover { background: #f1f5f9; }
+nav button.on { background: #fde8eb; color: #e60f2b; }
+main { flex: 1; padding: 24px; min-width: 0; max-width: 1100px; }
+h2 { margin: 0 0 16px; font-size: 22px; }
+h3 { margin: 0 0 8px; font-size: 16px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 16px; }
+.grid .full { grid-column: 1 / -1; }
+.chk { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.chk input { width: auto; }
+.actions { margin-top: 16px; display: flex; gap: 10px; align-items: center; }
+.toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.toolbar input, .toolbar select { max-width: 320px; }
+.toolbar .count { margin-left: auto; color: #64748b; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+th { background: #f8fafc; text-align: left; font-size: 12px; color: #475569; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }
+td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+td.act { white-space: nowrap; }
+td .muted { color: #94a3b8; }
+.badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #e0e7ff; color: #3730a3; }
+.badge.off { background: #f1f5f9; color: #94a3b8; }
+.badge.on { background: #e3f7ec; color: #047857; }
+pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 10px; overflow: auto; max-height: 360px; font-size: 12px; }
+.note { color: #64748b; font-size: 13px; }
+@media (max-width: 800px) { .layout { flex-direction: column; } nav { width: auto; } .grid { grid-template-columns: 1fr; } }
