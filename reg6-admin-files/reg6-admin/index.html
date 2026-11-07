@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ระบบจัดการเนื้อหา - สำนักงานไปรษณีย์เขต 6</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- หน้าเข้าสู่ระบบ -->
+<div id="login-view" class="hidden">
+  <form id="login-form" class="login-card">
+    <div class="logo">ปณ</div>
+    <h1>ระบบจัดการเนื้อหา</h1>
+    <p class="sub">สำนักงานไปรษณีย์เขต 6</p>
+    <div id="login-err" class="msg err hidden"></div>
+    <label for="email">อีเมล</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">รหัสผ่าน</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">เข้าสู่ระบบ</button>
+  </form>
+</div>
+
+<!-- หน้าจัดการ -->
+<div id="app-view" class="hidden">
+  <header>
+    <span class="brand">ระบบจัดการเนื้อหา · สำนักงานไปรษณีย์เขต 6</span>
+    <span class="who"><span id="who"></span> <button id="logout" class="link">ออกจากระบบ</button></span>
+  </header>
+  <div class="layout">
+    <nav id="nav"></nav>
+    <main>
+      <div id="dirty" class="msg warn hidden">บันทึกแล้ว เว็บไซต์จะอัปเดตเองตามรอบซิงก์ของเซิร์ฟเวอร์ (ประมาณ 5 นาที) <button class="link" id="goExport">อัปเดตทันทีด้วยตนเอง</button></div>
+      <div id="flash" class="msg hidden"></div>
+      <div id="content"></div>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
