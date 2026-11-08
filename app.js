@@ -629,7 +629,12 @@
     if (ev.target.id === 'cancel') { state.editId = null; state.editRow = null; render(); }
   });
   $('goExport').onclick = function () { go('export'); };
-  $('logout').onclick = async function () { await logEvent('logout'); await sb.auth.signOut(); showLogin(); };
+  $('logout').onclick = async function () {
+    await logEvent('logout');
+    await sb.auth.signOut();
+    if (window.CONFIG.siteUrl) { window.location.href = window.CONFIG.siteUrl; return; }   // กลับหน้าเว็บหลัก
+    showLogin();
+  };
   $('login-form').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     var btn = ev.target.querySelector('button');
