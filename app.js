@@ -51,7 +51,7 @@
       fields: [
         { k: 'title', l: 'หัวข้อข่าว (แสดงใต้โปสเตอร์)', t: 'text', req: 1, list: 1, full: 1 },
         { k: 'cat_id', l: 'หมวด', t: 'select', opts: 'news_category', num: 1, req: 1, list: 1, def: 2 },
-        { k: 'image_file', l: 'ชื่อไฟล์รูปโปสเตอร์ (ในโฟลเดอร์ images/news/)', t: 'text', list: 1 },
+        { k: 'image_file', l: 'รูปโปสเตอร์ (JPG, PNG, GIF, TIFF, WEBP)', t: 'image', list: 1, full: 1, fmt: function (v) { return /^https?:/i.test(v) ? 'มีรูป' : v; } },
         { k: 'link_url', l: 'ลิงก์เมื่อคลิก', t: 'text', def: '#' },
         { k: 'is_published', l: 'แสดงบนเว็บไซต์', t: 'bool', def: true, list: 1 }
       ]
@@ -173,12 +173,98 @@
     return id;
   }
 
+
+  // ---------- รูปโปสเตอร์: เลือกไฟล์ -> แปลงเป็น JPG -> อัปโหลดขึ้น Supabase Storage ----------
+  var BUCKET = 'news-images', IMG_MAX_W = 1200, IMG_MAX_H = 1600, IMG_MAX_BYTES = 15 * 1024 * 1024;
+  var IMG_EXT = { jpg: 1, jpeg: 1, png: 1, gif: 1, tif: 1, tiff: 1, webp: 1 };
+
+  function imgSrc(v) {                // ค่าที่เก็บอาจเป็น URL เต็ม หรือชื่อไฟล์เดิมใน images/news/
+    return /^https?:\/\//i.test(v) ? v : '';
+  }
+  function loadScript(src) {
+    return new Promise(function (ok, bad) {
+      var el = document.createElement('script');
+      el.src = src; el.onload = ok; el.onerror = function () { bad(new Error('โหลดไลบรารีไม่สำเร็จ: ' + src)); };
+      document.head.appendChild(el);
+    });
+  }
+  async function decodeToCanvasSource(file, ext) {
+    if (ext === 'tif' || ext === 'tiff') {       // เบราว์เซอร์ส่วนใหญ่เปิด TIFF ไม่ได้ ใช้ UTIF ถอดรหัสเอง
+      if (!window.pako) { await loadScript('https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js'); }
+      if (!window.UTIF) { await loadScript('https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js'); }
+      var buf = await file.arrayBuffer();
+      var ifds = window.UTIF.decode(buf);
+      if (!ifds.length) { throw new Error('อ่านไฟล์ TIFF ไม่ได้'); }
+      window.UTIF.decodeImage(buf, ifds[0]);
+      var w = ifds[0].width, h = ifds[0].height;
+      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      var ctx = cv.getContext('2d');
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(window.UTIF.toRGBA8(ifds[0])), w, h), 0, 0);
+      return cv;
+    }
+    if (window.createImageBitmap) {
+      try { return await createImageBitmap(file); } catch (e) { /* ลองวิธีสำรอง */ }
+    }
+    return await new Promise(function (ok, bad) {
+      var url = URL.createObjectURL(file), im = new Image();
+      im.onload = function () { ok(im); };
+      im.onerror = function () { bad(new Error('อ่านไฟล์รูปไม่ได้ (ไฟล์อาจเสียหรือไม่ใช่รูป)')); };
+      im.src = url;
+    });
+  }
+  async function toJpegBlob(file) {
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!IMG_EXT[ext]) { throw new Error('รองรับเฉพาะไฟล์ JPG, PNG, GIF, TIFF, WEBP'); }
+    if (file.size > IMG_MAX_BYTES) { throw new Error('ไฟล์ใหญ่เกิน 15 MB'); }
+    var src = await decodeToCanvasSource(file, ext);
+    var sw = src.width || src.naturalWidth, sh = src.height || src.naturalHeight;
+    if (!sw || !sh) { throw new Error('อ่านขนาดรูปไม่ได้'); }
+    var k = Math.min(1, IMG_MAX_W / sw, IMG_MAX_H / sh);
+    var cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(sw * k)); cv.height = Math.max(1, Math.round(sh * k));
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);   // พื้นหลังขาวแทนส่วนโปร่งใส
+    ctx.drawImage(src, 0, 0, cv.width, cv.height);
+    return await new Promise(function (ok, bad) {
+      cv.toBlob(function (b) { b ? ok(b) : bad(new Error('แปลงรูปเป็น JPG ไม่สำเร็จ')); }, 'image/jpeg', 0.88);
+    });
+  }
+  async function onPickImage(input) {
+    var id = input.id.replace(/_pick$/, ''), msg = $(id + '_msg'), btn = document.querySelector('#ent-form button[type=submit]');
+    var file = input.files && input.files[0];
+    if (!file) { return; }
+    msg.className = 'note'; msg.textContent = 'กำลังแปลงและอัปโหลดรูป...';
+    if (btn) { btn.disabled = true; }
+    try {
+      var blob = await toJpegBlob(file);
+      var path = 'news/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+      var up = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+      if (up.error) { throw up.error; }
+      var url = sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+      $(id).value = url;
+      var pv = $(id + '_prev'); pv.src = url; pv.className = 'imgprev';
+      $(id + '_clear').className = 'btn gray small';
+      msg.textContent = 'อัปโหลดแล้ว (' + Math.round(blob.size / 1024) + ' KB) กด "บันทึก" เพื่อใช้รูปนี้';
+    } catch (e) {
+      msg.className = 'note err'; msg.textContent = 'อัปโหลดรูปไม่สำเร็จ: ' + errText(e);
+      input.value = '';
+    }
+    if (btn) { btn.disabled = false; }
+  }
+
   function fieldHtml(f, val) {
     var id = 'f_' + f.k, inner;
     if (f.t === 'bool') {
       return '<div class="full"><label class="chk"><input type="checkbox" id="' + id + '"' + (val ? ' checked' : '') + '> ' + esc(f.l) + '</label></div>';
     }
-    if (f.t === 'textarea') {
+    if (f.t === 'image') {
+      var has = !!val;
+      inner = '<input type="hidden" id="' + id + '" value="' + esc(val) + '">' +
+        '<div class="imgpick"><img id="' + id + '_prev" class="imgprev' + (imgSrc(val) ? '' : ' hidden') + '" src="' + esc(imgSrc(val)) + '" alt="">' +
+        '<div><input type="file" id="' + id + '_pick" accept=".jpg,.jpeg,.png,.gif,.tif,.tiff,.webp,image/jpeg,image/png,image/gif,image/tiff,image/webp"> ' +
+        '<button type="button" class="btn gray small' + (has ? '' : ' hidden') + '" id="' + id + '_clear">ลบรูป</button>' +
+        '<p class="note" id="' + id + '_msg">' + (has && !imgSrc(val) ? 'รูปเดิม: ' + esc(val) + ' (ในโฟลเดอร์ images/news/) เลือกไฟล์ใหม่เพื่อแทนที่ ' : '') + 'เลือกไฟล์แล้วระบบจะย่อและแปลงเป็น JPG ให้อัตโนมัติ (ไม่เกิน 15 MB) แล้วอัปโหลดทันที</p></div></div>';
+    } else if (f.t === 'textarea') {
       inner = '<textarea id="' + id + '" rows="' + (f.rows || 3) + '">' + esc(val) + '</textarea>';
     } else if (f.t === 'select') {
       inner = '<select id="' + id + '">' + (state.lookups[f.opts] || []).map(function (o) {
@@ -475,9 +561,16 @@
     if (ev.target.id === 'q') { state.q = ev.target.value; renderTable(); }
   });
   document.addEventListener('change', function (ev) {
+    if (/^f_.*_pick$/.test(ev.target.id || '')) { onPickImage(ev.target); return; }
     if (ev.target.id === 'filter') { state.filter = ev.target.value || null; state.editId = null; state.editRow = null; render(); }
   });
   document.addEventListener('click', function (ev) {
+    var tid = ev.target.id || '';
+    if (/^f_.*_clear$/.test(tid)) {
+      var base = tid.replace(/_clear$/, '');
+      $(base).value = ''; $(base + '_prev').className = 'imgprev hidden'; $(base + '_pick').value = ''; ev.target.className = 'btn gray small hidden';
+      $(base + '_msg').textContent = 'ลบรูปแล้ว กด "บันทึก" เพื่อยืนยัน';
+    }
     if (ev.target.id === 'cancel') { state.editId = null; state.editRow = null; render(); }
   });
   $('goExport').onclick = function () { go('export'); };

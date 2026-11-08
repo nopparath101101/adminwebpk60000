@@ -60,3 +60,7 @@ td .muted { color: #94a3b8; }
 pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 10px; overflow: auto; max-height: 360px; font-size: 12px; }
 .note { color: #64748b; font-size: 13px; }
 @media (max-width: 800px) { .layout { flex-direction: column; } nav { width: auto; } .grid { grid-template-columns: 1fr; } }
+
+.imgpick { display: flex; gap: 14px; align-items: flex-start; }
+.imgprev { max-width: 160px; max-height: 120px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+.note.err { color: #a50d26; }
