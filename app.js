@@ -52,7 +52,7 @@
         { k: 'title', l: 'หัวข้อข่าว (แสดงใต้โปสเตอร์)', t: 'text', req: 1, list: 1, full: 1 },
         { k: 'cat_id', l: 'หมวด', t: 'select', opts: 'news_category', num: 1, req: 1, list: 1, def: 2 },
         { k: 'image_file', l: 'รูปโปสเตอร์ (JPG, PNG, GIF, TIFF, WEBP)', t: 'image', list: 1, full: 1, fmt: function (v) { return /^https?:/i.test(v) ? 'มีรูป' : v; } },
-        { k: 'link_url', l: 'ลิงก์เมื่อคลิก', t: 'text', def: '#' },
+        { k: 'link_url', l: 'ลิงก์เมื่อคลิก (วาง URL ได้เลย เช่น https://example.com ถ้าไม่ใส่จะไม่มีลิงก์)', t: 'text', url: 1, ph: 'https://', full: 1, def: '' },
         { k: 'is_published', l: 'แสดงบนเว็บไซต์', t: 'bool', def: true, list: 1 }
       ]
     },
@@ -124,7 +124,7 @@
       ]
     }
   };
-  var NAV = ['news', 'circular', 'hub_section', 'hub_item', 'phone_directory', 'dept', 'dashboard', 'export'];
+  var NAV = ['news', 'circular', 'hub_section', 'hub_item', 'phone_directory', 'dept', 'dashboard', 'loginlog', 'export'];
 
   // ---------- สถานะ ----------
   var state = { tab: 'news', editId: null, editRow: null, filter: null, q: '', lookups: {}, rows: [] };
@@ -148,7 +148,7 @@
   // ---------- เมนู ----------
   function renderNav() {
     $('nav').innerHTML = NAV.map(function (k) {
-      var name = k === 'export' ? 'ส่งออกไปยังเว็บไซต์' : ENT[k].nav;
+      var name = k === 'export' ? 'ส่งออกไปยังเว็บไซต์' : k === 'loginlog' ? 'สถิติเข้า-ออกระบบ' : ENT[k].nav;
       return '<button data-tab="' + k + '" class="' + (state.tab === k ? 'on' : '') + '">' + esc(name) + '</button>';
     }).join('');
   }
@@ -271,13 +271,14 @@
         return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(val) ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
       }).join('') + '</select>';
     } else {
-      inner = '<input type="' + (f.t === 'date' ? 'date' : f.t === 'number' ? 'number' : 'text') + '" id="' + id + '" value="' + esc(val) + '">';
+      inner = '<input' + (f.ph ? ' placeholder="' + esc(f.ph) + '"' : '') + ' type="' + (f.t === 'date' ? 'date' : f.t === 'number' ? 'number' : 'text') + '" id="' + id + '" value="' + esc(val) + '">';
     }
     return '<div' + (f.full ? ' class="full"' : '') + '><label for="' + id + '">' + esc(f.l) + '</label>' + inner + '</div>';
   }
 
   async function render() {
     if (state.tab === 'export') { return renderExport(); }
+    if (state.tab === 'loginlog') { return renderLoginLog(); }
     var ent = ENT[state.tab], c = $('content');
     c.innerHTML = '<p class="note">กำลังโหลด...</p>';
     try {
@@ -351,6 +352,7 @@
         v = el.value.trim();
         if (v === '') { if (f.req) { throw new Error('กรุณากรอก "' + f.l.replace(/\s*\(.*$/, '') + '"'); } v = f.num ? 0 : null; if (f.t === 'select') { v = null; } }
         else if (f.num) { v = Number(v); }
+        else if (f.url && v !== '#' && !/^(https?:\/\/|\/|#|mailto:|tel:)/i.test(v)) { v = 'https://' + v.replace(/^\/+/, ''); }
       }
       if (f.virtual) { virt[f.k] = v || ''; } else { payload[f.k] = v; }
     });
@@ -523,8 +525,60 @@
     btns.forEach(function (b) { b.disabled = false; });
   }
 
+
+  // ---------- สถิติการเข้า-ออกระบบ ----------
+  async function logEvent(event) {
+    try {
+      var u = await sb.auth.getUser();
+      var email = (u && u.data && u.data.user && u.data.user.email) || '';
+      var r = await sb.from('admin_login_log').insert({ email: email, event: event, user_agent: String(navigator.userAgent || '').slice(0, 300) });
+      if (r.error) { throw r.error; }
+    } catch (e) {
+      if (window.console) { console.warn('บันทึกสถิติ ' + event + ' ไม่สำเร็จ:', e); }
+      try { flash('บันทึกสถิติเข้า-ออกระบบไม่สำเร็จ (ตรวจว่ารัน supabase_step4_login_log.sql แล้ว)', 'warn'); } catch (e2) { /* ignore */ }
+    }
+  }
+  function dtTh(iso) {
+    try { return new Date(iso).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'medium' }); }
+    catch (e) { return String(iso); }
+  }
+  async function renderLoginLog() {
+    var c = $('content');
+    c.innerHTML = '<p class="note">กำลังโหลด...</p>';
+    var rows;
+    try { rows = await fetchAll('admin_login_log', [['created_at', false], ['log_id', false]]); }
+    catch (e) { c.innerHTML = ''; flash('โหลดสถิติไม่สำเร็จ: ' + errText(e) + ' (ตรวจว่ารัน supabase_step4_login_log.sql แล้ว)', 'err'); return; }
+    var today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+    var tot = { login: 0, logout: 0, todayLogin: 0 }, by = {};
+    rows.forEach(function (r) {
+      var k = r.email || '(ไม่ทราบ)';
+      if (!by[k]) { by[k] = { login: 0, logout: 0, last: null }; }
+      if (r.event === 'login') {
+        tot.login++; by[k].login++;
+        if (!by[k].last) { by[k].last = r.created_at; }      // rows เรียงใหม่ -> เก่า
+        if (new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) === today) { tot.todayLogin++; }
+      } else { tot.logout++; by[k].logout++; }
+    });
+    var h = '<h2>สถิติการเข้า-ออกระบบ admin</h2>';
+    h += '<div class="card"><div class="grid">' +
+      '<div><label>เข้าสู่ระบบทั้งหมด</label><b style="font-size:26px">' + tot.login + '</b> ครั้ง</div>' +
+      '<div><label>ออกจากระบบทั้งหมด</label><b style="font-size:26px">' + tot.logout + '</b> ครั้ง</div>' +
+      '<div><label>เข้าสู่ระบบวันนี้</label><b style="font-size:26px">' + tot.todayLogin + '</b> ครั้ง</div></div>' +
+      '<p class="note">นับเฉพาะการกดเข้าสู่ระบบ/ออกจากระบบด้วยตนเอง การปิดหน้าต่างหรือเซสชันหมดอายุจะไม่นับเป็นการออกจากระบบ</p></div>';
+    h += '<h3>แยกตามผู้ใช้</h3><table><tr><th>อีเมล</th><th>เข้าสู่ระบบ (ครั้ง)</th><th>ออกจากระบบ (ครั้ง)</th><th>เข้าล่าสุด</th></tr>';
+    Object.keys(by).forEach(function (k) {
+      h += '<tr><td>' + esc(k) + '</td><td>' + by[k].login + '</td><td>' + by[k].logout + '</td><td>' + (by[k].last ? esc(dtTh(by[k].last)) : '-') + '</td></tr>';
+    });
+    if (!rows.length) { h += '<tr><td colspan="4" class="muted">ยังไม่มีข้อมูล</td></tr>'; }
+    h += '</table><h3>ประวัติล่าสุด (200 รายการ)</h3><table><tr><th>เวลา</th><th>อีเมล</th><th>รายการ</th></tr>';
+    rows.slice(0, 200).forEach(function (r) {
+      h += '<tr><td>' + esc(dtTh(r.created_at)) + '</td><td>' + esc(r.email || '') + '</td><td><span class="badge ' + (r.event === 'login' ? 'on' : 'off') + '">' + (r.event === 'login' ? 'เข้าสู่ระบบ' : 'ออกจากระบบ') + '</span></td></tr>';
+    });
+    c.innerHTML = h + '</table>';
+  }
+
   // ---------- เข้าสู่ระบบ ----------
-  async function showApp(session) {
+  async function showApp(session, isNewLogin) {
     var ok = await sb.rpc('is_admin');
     if (ok.error || ok.data !== true) {
       await sb.auth.signOut();
@@ -537,6 +591,7 @@
     var dirty = false;
     try { dirty = !!sessionStorage.getItem('reg6_dirty'); } catch (e) { /* ignore */ }
     setDirty(dirty);
+    if (isNewLogin) { await logEvent('login'); }
     go(state.tab);
   }
   function showLogin(msg) {
@@ -574,7 +629,7 @@
     if (ev.target.id === 'cancel') { state.editId = null; state.editRow = null; render(); }
   });
   $('goExport').onclick = function () { go('export'); };
-  $('logout').onclick = async function () { await sb.auth.signOut(); showLogin(); };
+  $('logout').onclick = async function () { await logEvent('logout'); await sb.auth.signOut(); showLogin(); };
   $('login-form').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     var btn = ev.target.querySelector('button');
@@ -582,7 +637,7 @@
     var r = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
     btn.disabled = false;
     if (r.error) { showLogin('อีเมลหรือรหัสผ่านไม่ถูกต้อง'); return; }
-    await showApp(r.data.session);
+    await showApp(r.data.session, true);
   });
 
   (async function start() {
